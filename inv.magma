@@ -1,0 +1,400 @@
+////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and a trace bound"
+// contains general code for minimizing Tr Ad via invariant derivations
+//
+/////////////////////////////////////////////////////////////////
+
+load "trace_base.magma";
+
+////////////////////////////////////////////////////////////////
+//
+// Construct the basic data
+//
+// args: cartan_type = "G2", "F4", etc.
+//
+// returns: datum, A, fund_reps
+//		datum = simply connected root datum of type cartan_type
+//		A = integer matrix for a symmetric bilinear form (scaled Killing form) on coroots
+//		fund_reps = fundamental irreps of the Lie algebra as a list
+//
+// example: datum, A, fund_reps := setup("G2");
+//
+/////////////////////////////////////////////////////////////////
+function setup(cartan_type);
+	datum := RootDatum(cartan_type : Isogeny := "SC");
+
+	// create a SeqEnum fund_reps consisting of the fundamental representations
+	zvec := [0 : i in [1..Rank(datum)]];
+	fund_reps := [];
+	for i in [1..Rank(datum)] do
+	  wt := zvec;
+	  wt[i] := 1;
+	  Append(~fund_reps, LieRepresentationDecomposition(datum, wt));
+	end for;
+
+	// indivisible integer matrix for scaled Killing bilinear form on coroots
+	A := 2*CoxeterForm(datum)*Order(FundamentalGroup(datum));  
+
+	return datum, A, fund_reps;
+end function;
+
+// The Casimir and the pseudo-Casimir should differ by a meromorphic
+// derivation, so give the same matrix M.
+
+// Casimir
+function cas(l, datum, A)
+  local lmon, rho;
+
+  rho:=Vector([2 : i in [1..Rank(datum)]]);
+
+
+  lmon:=l;
+  lmon:= LieRepresentationDecomposition(datum,
+          Weights(lmon),
+          [Integers()|Multiplicity(lmon,w)*InnerProduct(Vector(w)*A,Vector(w)+rho):w in
+            Weights(lmon)]);
+
+  return lmon;
+end function;
+
+// pseudo-Casimir
+function pcas(l, datum, A)
+  local lmon;
+
+  lmon:=DominantCharacter(l);
+  lmon:=LieRepresentationDecomposition(datum,
+            Weights(lmon),
+            [Integers()|Multiplicity(lmon,w)*InnerProduct(Vector(w)*A,Vector(w)):w in
+            Weights(lmon)]);
+
+  return VirtualDecomposition(lmon);
+end function;
+
+
+////////////////////////////////////////////////////////////////
+//
+// Define the polynomial ring in the traces of the fundamental representations
+//
+// args: datum = RootDatum
+// optional argument: 
+//			polyring = polynomial ring if you want to force the same parent ring
+//
+// returns: P = graded polynomial ring in rank generators
+//
+/////////////////////////////////////////////////////////////////
+function make_polyring(datum : polyring := false);
+	// coefficients of the highest coroot in the simple coroots
+	coeffvec := Eltseq(HighestCoroot(datum));
+	coeffs := [ZZ!coeffvec[i] : i in [1..Rank(datum)]];
+
+	if Type(polyring) eq BoolElt then // polyring was not set, so make the ring
+		P :=PolynomialRing(Rationals(),coeffs,"grevlexw",coeffs);
+	else // use the one they passed instead
+		P := polyring;
+	end if;
+
+	return P;
+end function;
+
+
+////////////////////////////////////////////////////////////////
+//
+// Compute the matrix M
+//
+// args: datum, A, fund_reps
+// optional argument: func = cas (default) or pcas
+//			polyring = polynomial ring if you want to force the same parent ring
+//
+// returns: M = rank-by-rank matrix with polynomial entries
+//
+// example: M := compute_M(datum, A, fund_reps);
+//
+/////////////////////////////////////////////////////////////////
+function compute_M(datum, A, fund_reps : func := cas, polyring := false);
+	zvec := [0 : i in [1..Rank(datum)]];
+
+	casfs := [func(lf, datum, A): lf in fund_reps];
+	zz:=LieRepresentationDecomposition(datum,zvec);
+	// It's remarkably difficult to make *independent* copies of the
+	// 0-dimensional representation!
+	tt:=[[TensorProduct(zz,zz):i in [1..Rank(datum)]]:j in [1..Rank(datum)]];
+	for i in [1..Rank(datum)] do
+	  for j in [1..Rank(datum)] do
+	    AddRepresentation(~tt[i,j],zz,-1);
+	  end for;
+	end for;
+
+	for i in [1..Rank(datum)] do
+	  for j in [i..Rank(datum)] do
+	    AddRepresentation(~tt[i,j],func(TensorProduct(fund_reps[i],fund_reps[j]), datum, A));
+	    if i eq j then
+	      AddRepresentation(~tt[i,j],TensorProduct(casfs[i],fund_reps[j]),-2);
+	    else
+	      AddRepresentation(~tt[i,j],TensorProduct(casfs[i],fund_reps[j]),-1);
+	      AddRepresentation(~tt[i,j],TensorProduct(casfs[j],fund_reps[i]),-1);
+	    end if;
+	  end for;
+	end for;
+
+	for i in [1..Rank(datum)] do
+	  for j in [i+1..Rank(datum)] do
+	    AddRepresentation(~tt[j,i],tt[i,j]);
+	  end for;
+	end for;
+
+	P := make_polyring(datum : polyring := polyring);
+
+	M:=MatrixAlgebra(P,Rank(datum))!0;
+
+	wtst:=&cat[[w*A:w in Weights(m)]:m in &cat tt];
+	while #wtst ne 0 do
+	  mwt:=Max(wtst)*A^(-1);
+	  if mwt ne 0 then
+	    cm:=TensorProduct(&cat[[Parent(fund_reps[i])|fund_reps[i]:j in [1..Integers()!mwt[i]]]:i in [1..Rank(datum)]]);
+	  else
+	    cm:=LieRepresentationDecomposition(datum,zvec);
+	  end if;
+	  mm:=&*(&cat[[P|P.i:j in [1..Integers()!mwt[i]]]:i in [1..Rank(datum)]]);
+	  for i in [1..Rank(datum)] do
+	    for j in [1..Rank(datum)] do
+	      mu:=Multiplicity(tt[i,j],mwt);
+	      if mu ne 0 then
+	        M[i,j]+:=mu*mm;
+	        AddRepresentation(~tt[i,j],cm,-mu);
+	      end if;
+	    end for;
+	  end for;
+	  wtst:=&cat[[w*A:w in Weights(m)]:m in &cat tt];
+	end while;
+
+	assert IsSymmetric(M);
+
+	return M;
+end function;
+
+
+////////////////////////////////////////////////////////////////
+//
+// Which fundamental rep is the adjoint rep?
+//
+// args: datum
+//
+// returns: i in 1 .. Rank(datum) 
+//
+/////////////////////////////////////////////////////////////////
+function adj_index(datum);
+	adj_rep := [HighestRoot(datum)[i] : i in [1..Rank(datum)]];
+	assert &+adj_rep eq 1; // we are exceptional type so the adjoint rep is a fundamental irrep
+	adj_coord := Index(adj_rep, 1); // which fundamental weight is it?
+	return adj_coord;
+end function;
+
+
+////////////////////////////////////////////////////////////////
+//
+// Find the character values for a fundamental character
+//
+// args:	datum = root datum
+//			M = matrix M created above
+//			ind = index of fundamental character
+//
+// returns: character values on the compact group at critical points
+//
+/////////////////////////////////////////////////////////////////
+function rep_to_crits(datum, M, ind);
+	// define the hermitian matrix M^sigma as defined in the paper
+	if CartanName(datum) in ["E7", "E8", "G2", "F4"] then
+		Msig := M;
+	elif CartanName(datum) eq "E6" then
+		Msig:=Matrix([M[6],M[2],M[5],M[4],M[3],M[1]]);
+	else
+		printf error_str cat "Don't know how to define matrix M^sigma for type %o, please improve the code\n", CartanName(datum);
+		quit;
+	end if;
+
+	idl := Ideal(Eltseq(M[ind]));
+	rd := RadicalDecomposition(idl);
+
+	idlc := Ideal(Eltseq(M));
+	corners := RadicalDecomposition(idlc);
+	printf info_str cat "Found %o components of critical points for this representation and %o corners\n", #rd, #corners;
+
+	P := CoefficientRing(M);
+
+	corner_vals := [Rationals()|NormalForm(P.ind,c):c in corners];
+	good_trs := Set(corner_vals); // we will keep track of the traces of compact elements
+	printf info_str cat "Corners have traces %o\n", Set(corner_vals);
+
+	// remove corners and components that are the same as corners
+	flag := false;
+	remaining := rd;
+	for r in rd do
+		if r in corners then
+			Exclude(~remaining, r); // remove corners
+		// for non-corners, check if it contains a corner and the desired function 
+		// is constant on the component
+		elif Dimension(r) gt 0 then
+			if NormalForm(P.ind, r) in Rationals() then // if the trace is constant rational
+				if &or[r subset c : c in corners] then // and it contains a corner
+					Exclude(~remaining, r); // then get rid of it
+					flag := true;
+				end if;
+			end if;
+		end if;
+	end for;
+
+	if flag then
+		printf info_str cat "After removing components containing corners where the trace is constant, have %o components left\n", #remaining;
+	else
+		printf info_str cat "After removing corners, have %o components left\n", #remaining;
+	end if;
+
+	// look at rational entries
+	rd1 := [r:r in remaining|HilbertSeries(LeadingMonomialIdeal(r)) eq 1];
+	if #rd1 gt 0 then
+		coords1:=[[Rationals()|NormalForm(P.i,r):i in [1..Rank(datum)]]:r in rd1]; // coordinates
+		if CartanName(datum) eq "E6" then
+			// real values have to have the 1st and 6th coordinates be complex conjugates
+			coords1 := [c:c in coords1| c[1] eq ComplexConjugate(c[6])];
+		end if;
+		goods1:=[c[ind]:c in coords1|IsNegativeSemiDefinite(Evaluate(Msig,c))]; // Is M neg. semidefinite?
+		printf info_str cat "Degree 1 points: found %o of which %o were from the compact group, providing traces %o\n", #rd1, #goods1, Set(goods1);
+		good_trs := good_trs join Set(goods1);
+		remaining := [c : c in remaining | not c in rd1];
+	end if;
+
+	printf info_str cat "After examining corners and degree 1 points, found traces %o\n", good_trs;
+
+	// for non-rational points, have to treat E6 on its own because some of the
+	// fundamental representations are complex
+	if CartanName(datum) eq "E6" then
+			assert ind eq 2; // expecting the adjoint representation
+			// for E6 adjoint, these points happen to split over Q(\sqrt{3})
+			K<z3>:=CyclotomicField(3);
+			PK:=ChangeRing(P,K);
+			// and we only need one of the two factors for each case
+			rd2k:=[RadicalDecomposition(Ideal([PK|p:p in Basis(r)]))[1]:r in remaining];
+			assert &and[HilbertSeries(LeadingMonomialIdeal(r)) eq 1:r in rd2k];
+			cpts2:=[[K|NormalForm(PK.i,r):i in [1..6]]:r in rd2k];
+
+			reals2:=[c:c in cpts2|c[1] eq ComplexConjugate(c[6])];
+			reals2:=[c:c in reals2|c[3] eq ComplexConjugate(c[5])];
+			assert #reals2 eq 2;
+			printf info_str cat "Examining real embeddings for %o higher degree components\n", #reals2;
+
+			// Sadly, magma doesn't directly tell us about semidefiniteness for
+			// matrices over \Q(\zeta_3), so we kludge.
+			// the first point is not negative semidefinite
+			mp:=ChangeRing(MinimalPolynomial(Evaluate(Msig,reals2[1])),Rationals());
+			assert #Roots(mp) eq Degree(mp);
+			assert not &and[x[1] le 0:x in Roots(mp)];
+
+			mp:=ChangeRing(MinimalPolynomial(Evaluate(Msig,reals2[2])),Rationals());
+			assert #Roots(mp) eq Degree(mp);
+			assert &and[x[1] le 0:x in Roots(mp)];
+			// but this doesn't actually give us anything new, as it differs
+			// from a known point under multiplication by the center...
+			// (It's the trace 14 point)
+			remaining := [];
+	elif CartanName(datum) in ["G2", "F4", "E7", "E8"] and #remaining ge 1 then
+			// for these types no representations are complex
+			Ks:=[quo<P|r>:r in remaining];
+			mps:=[MinimalPolynomial(k.1):k in Ks];
+
+			// we have to do a little trick here to handle the E7 adjoint case
+			if CartanName(datum) eq "E7" then
+				assert #remaining eq 1;
+				assert ind eq 1;
+				A := quo<P|remaining[1]>;
+			else
+				A:=quo<P|idl>;
+			end if;
+			// SetVerbose("Groebner",2);
+			time mp:=MinimalPolynomial(A.ind);
+			// SetVerbose("Groebner",falsex);
+
+			minc := Min(good_trs);
+			maxc := Max(good_trs);
+			R:=RealField(100);
+			ff:=Factorization(mp);
+			mps:=[f[1]:f in ff|Degree(f[1]) gt 1];
+			rr:=&cat[[<i,r[1]>:r in Roots(ChangeRing(mps[i],R))]:i in [1..#mps]];
+
+			// if the trace is greater than the minimum we have already found, we aren't interested
+			rr:=[Parent(<1,R!0>)|r:r in rr|r[2] le minc+1/10000];
+			// if the trace is more negative than -dim, it can't come from the compact form
+			rr:=[Parent(<1,R!0>)|r:r in rr|r[2] gt -maxc-1/10000];
+			// the above lines become a bit dubious due to round-off error when dealing with extremely
+			// large representations
+
+			printf info_str cat "Examining %o real embeddings for %o higher degree components\n", #rr, #remaining;
+
+			goodsb:=[Universe(rr)|];
+			time for r in rr do
+			  ii:=idl+Ideal(Evaluate(mps[r[1]],P.ind));
+			  iie:=ChangeOrder(ii,<"elimw",[i:i in [1..Rank(datum)]|i ne ind],[ind],[WeightedDegree(P.i):i in [1..8]]>);
+			  time Groebner(iie);
+			  // check that the objective generates the field
+			  // (if not, we'd have to do something more complicated!)
+			  assert &and[TotalDegree(LeadingMonomial(p)) eq 1:p in Basis(iie)|Degree(LeadingMonomial(p),ind) eq 0];
+			  Mx:=Evaluate(M,[NormalForm(Generic(iie).i,iie):i in [1..Rank(datum)]]);
+			  Mxr:=Evaluate(Mx,[i eq ind select r[2] else 0:i in [1..Rank(datum)]]);
+
+			  // Since we're working to 100 bits of precision, an eigenvalue which is
+			  // greater than 1/10^10 should be actually positive.
+
+		    // if Mxr is neg semi-definite then Trace(Mxr) le 0
+			  if Trace(Mxr) gt 1/10^10 then continue; end if;
+
+		    // if Mxr is neg semi-definite then Trace(wedge^2 Mxr) ge 0
+			  if Trace(ExteriorSquare(Mxr)) lt -1/10^10 then continue; end if;
+
+		    // if the Trace and Trace(wedge^2) have the right signs, let's call it good 
+			  // while this is not an if and only if, the error would be adding too much to goodsb
+			  Append(~goodsb,r);
+			end for;
+			assert #goodsb eq 0; // but we didn't find anything in goodsb
+
+			remaining := [];
+	end if;
+
+	assert #remaining eq 0;
+
+	return good_trs;
+end function;
+
+
+////////////////////////////////////////////////////////////////
+//
+// Do the full calculation of critical values of Tr Ad
+//
+// args:	cartan_type = "G2", "F4", etc
+//
+// optional_arg: check_pseudo = compute the pseudo-Casimir and compare?
+//			load_file = read the M matrix from disk instead of recalculating
+//						(most important for type E8)
+//
+// returns: character values on the compact group at critical points
+//
+/////////////////////////////////////////////////////////////////
+function tr_adj_crit_values(cartan_type : check_pseudo := false);
+	section(cartan_type cat " adjoint representation by invariant derivations");
+	datum, A, fund_reps := setup(cartan_type);
+
+	// here we compute using the Casimir
+	M := compute_M(datum, A, fund_reps);
+
+	if check_pseudo then
+		// here we compute using the pseudo-Casimir
+		Mp := compute_M(datum, A, fund_reps : func := pcas, polyring := CoefficientRing(M));
+
+		// now we compare, they should give the same matrix
+		assert M eq Mp; 
+
+		// the assertion passed
+		print info_str cat "Verified that Casimir = pseudo-Casimir";
+	end if;
+
+	return rep_to_crits(datum, M, adj_index(datum));
+end function;

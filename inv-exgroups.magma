@@ -1,0 +1,20 @@
+/////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and trace bounds"
+// for groups of type G2, F4, E6, E7 via invariant derivations
+//
+/////////////////////////////////////////////////////////////////
+
+load "inv.magma";
+
+// types G2 and F4 go quickly so we include also the sanity check
+for cartan_type in ["G2", "F4"] do
+  time tr_adj_crit_values(cartan_type : check_pseudo := true);
+end for;
+
+// for larger exceptional groups, we omit the sanity check for interest of time
+for cartan_type in ["E6", "E7"] do
+  time tr_adj_crit_values(cartan_type);
+end for;
+
+quit;

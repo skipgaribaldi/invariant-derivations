@@ -1,0 +1,71 @@
+/////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and a trace bound"
+// this file contains general setup code
+//
+/////////////////////////////////////////////////////////////////
+
+indent_space := " "^4; // how far to indent indented messages
+info_str := "... "; // how to preface informational strings
+warn_str := "---> "; // how to preface warning strings
+error_str := "---> ERROR ---> "; // preface for an error string
+
+info_prefix := indent_space cat info_str;
+warn_prefix := indent_space cat warn_str;
+error_prefix := indent_space cat error_str;
+
+SetGBGlobalModular(false);
+ZZ := IntegerRing();
+
+/////////////////////////////////////////////////////////////////
+//
+// given a root datum and an index, report the dimension of that fundamental rep
+//
+// arguments: datum = root datum
+//			ind = an integer in [1..Rank(datum)]
+//
+// return: dimension of the fundamental irrep indicated by ind
+//
+/////////////////////////////////////////////////////////////////
+function FundDim(datum, ind);
+	w := [0 : i in [1..Rank(datum)]];
+	w[ind] := 1;
+
+	return RepresentationDimension(datum, w);
+end function;
+
+
+/////////////////////////////////////////////////////////////////
+//
+// print a line of text in a box, for breaking output up into sections
+//
+/////////////////////////////////////////////////////////////////
+procedure section(headline);
+	len := Max(#headline + 2, 70);
+	header := "+" cat "-"^len cat "+";
+
+	if #headline lt 68 then
+		headline cat:= " "^(68-#headline);
+	end if;
+
+	print header;
+	printf "| " cat headline cat " |\n";
+	print header;
+	printf "\n";
+end procedure;
+
+
+
+/////////////////////////////////////////////////////////////////
+//
+// report the version of Magma being used
+//
+/////////////////////////////////////////////////////////////////
+procedure PrintVersion();
+	x,y,z := GetVersion();
+	printf "Running Magma V%o.%o-%o\n", x, y, z;
+end procedure;
+
+SetColumns(0); // turn off automatic word wrapping of output
+
+PrintVersion(); // print the version of Magma that is running

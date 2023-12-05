@@ -1,0 +1,111 @@
+
+/////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and a trace bound"
+// for groups of type G2, F4, E7, E8 by symmetry breaking
+//
+/////////////////////////////////////////////////////////////////
+
+load "break-base.magma";
+
+/////////////////////////////////////////////////////////////////
+//
+// G2
+//
+/////////////////////////////////////////////////////////////////
+
+rm:=RestrictionMatrix("G2","A1A1");
+g2:=RootDatum("G2":Isogeny:="SC");
+a1a1:=RootDatum("A1A1":Isogeny:="SC");
+Dsmall := Branch(g2,a1a1,Vector([1,0]),rm);
+Dbig := Branch(g2,a1a1,Vector([0,1]),rm);
+
+section("G2 adjoint representation");
+DecToTraces(Dbig);
+
+section("G2 short root representation");
+DecToTraces(Dsmall);
+
+/////////////////////////////////////////////////////////////////
+//
+// F4
+//
+/////////////////////////////////////////////////////////////////
+
+// Magma doesn't know how to branch directly to the A1^4 in F4, 
+// so we have to do it step-by-step
+rm1 := RestrictionMatrix("F4", "C3A1");
+rm2 := DiagonalJoin(RestrictionMatrix("C3", "B2A1"), IdentityMatrix(ZZ, 1));
+rm3 := DiagonalJoin(RestrictionMatrix("B2", "A1A1"), IdentityMatrix(ZZ, 2));
+rm := rm1 * rm2 * rm3;
+
+f4 := RootDatum("F4":Isogeny:="SC");
+a14 := RootDatum("A1A1A1A1":Isogeny:= "SC");
+Dbig := Branch(f4,a14,Vector([1,0,0,0]), rm);
+Dsmall:= Branch(f4,a14,Vector([0,0,0,1]), rm);
+
+section("F4 adjoint representation");
+DecToTraces(Dbig);
+
+section("F4 short root representation");
+DecToTraces(Dsmall);
+
+
+
+/////////////////////////////////////////////////////////////////
+//
+// E7
+//
+/////////////////////////////////////////////////////////////////
+section("E7 adjoint representation");
+
+g := RootDatum("E7":Isogeny:="SC");
+as := RootDatum("A1A1A1A1A1A1A1":Isogeny:= "SC");
+
+rm1 := RestrictionMatrix("E7", "D6A1");
+rm2 := DiagonalJoin(RestrictionMatrix("D6", "D4A1A1"), IdentityMatrix(ZZ, 1));
+rm3 := DiagonalJoin(RestrictionMatrix("D4", "A1A1A1A1"), IdentityMatrix(ZZ, 3));
+rm := rm1 * rm2 * rm3;
+
+D := Branch(g,as,Vector([1,0,0,0,0,0,0]), rm);
+dim := 133;
+assert RepresentationDimension(D) eq dim;
+
+obj := DecToObj(D);
+
+P := Parent(obj);
+expected_min := -7;
+expected_max := dim;
+CheckTraces(obj, expected_min, expected_max, [P.1 - 2, P.6 - 2, P.7 - 2]);
+CheckTraces(obj, expected_min, expected_max, [P.5 - 2, P.6 - 2, P.7 - 2]);
+
+
+/////////////////////////////////////////////////////////////////
+//
+// E8
+//
+/////////////////////////////////////////////////////////////////
+section("E8 adjoint representation");
+
+g := RootDatum("E8":Isogeny:="SC");
+as := RootDatum("A1A1A1A1A1A1A1A1":Isogeny:= "SC");
+
+rm0 := RestrictionMatrix("E8", "E7A1");
+rm1 := DiagonalJoin(RestrictionMatrix("E7", "D6A1"), IdentityMatrix(ZZ, 1));
+rm2 := DiagonalJoin(RestrictionMatrix("D6", "D4A1A1"), IdentityMatrix(ZZ, 2));
+rm3 := DiagonalJoin(RestrictionMatrix("D4", "A1A1A1A1"), IdentityMatrix(ZZ, 4));
+rm := rm0 * rm1 * rm2 * rm3;
+
+D := Branch(g,as,Vector([0,0,0,0,0,0,0,1]), rm);
+dim := 248;
+assert RepresentationDimension(D) eq dim;
+
+obj := DecToObj(D);
+
+P := Parent(obj);
+expected_min := -8;
+expected_max := dim;
+CheckTraces(obj, expected_min, expected_max, [P.1 - 2, P.6 - 2, P.7 - 2, P.8 - 2]);
+CheckTraces(obj, expected_min, expected_max, [P.5 - 2, P.6 - 2, P.7 - 2, P.8 - 2]);
+
+

@@ -1,0 +1,63 @@
+/////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and a trace bound"
+// for groups of type E6 by symmetry breaking
+//
+/////////////////////////////////////////////////////////////////
+
+load "trace_base.magma";
+
+section("E6 adjoint representation");
+
+// T = trace of our semisimple element on Lie algebra e_6
+// ta = trace of the A_1 component on Lie algebra a_1
+P<l1,l2,ta,l1i,l2i,T>:=PolynomialAlgebra(Rationals(),6,"elim",5);
+F:=FieldOfFractions(P);
+
+pp:=
+Polynomial([F|1/l1^2/l2^2,-ta/l1/l2,1])
+*Polynomial([F|-l1,1])^2*Polynomial([F|-l2,1])^2;
+e1b:=-Coefficient(pp,5);
+e5b:=-Coefficient(pp,1);
+e3b:=-Coefficient(pp,3);
+obj:=e1b*e5b+2+2*e3b;  // trace on A5 A1
+
+grad:=[Derivative(obj,i):i in [1..2]] cat [(ta^2-4)*Derivative(obj,3)];
+grad:=[P|Numerator(g):g in grad];
+eqs:=Reduce(grad cat [l1*l1i-1,l2*l2i-1]);
+idl:=Ideal(eqs);
+Groebner(idl);
+idlt:=idl+Ideal(Numerator(obj-T));
+Groebner(idlt);
+
+eqT:=Basis(idlt)[#Basis(idlt)];
+// verify that this is indeed an equation in T (i.e., that every
+// component of the critical locus has constant trace)
+assert &and[Degree(eqT,i) eq 0:i in [1..5]];
+P1<t>:=PolynomialAlgebra(Rationals());
+rts:=Roots(Evaluate(eqT,[0,0,0,0,0,t]));
+
+// We need to check that the cases with objective less than -3 do not
+// appear in the compact group
+
+good_trs := [];
+bad_trs := [];
+for rt in rts do
+	r := rt[1];
+	if r ge -3 and r le 78 then // traces in our claimed range
+		Append(~good_trs, r);
+	else // not in our claimed range, better verify it can't be from the compact group
+		idlbad:=(idlt+Ideal(&*[P|T-r]));
+		assert NormalForm(ta^2, idlbad) gt 4; // definitely not from the compact A1
+		Append(~bad_trs, r);
+	end if;
+end for;
+
+good_min := Min(good_trs);
+good_max := Max(good_trs);
+printf "%o Found possible traces at critical points %o\n", info_str, Set(good_trs);
+
+printf "%o Also found traces %o at critical points not from the compact group\n", info_str, Set(bad_trs);
+
+Cputime();
+

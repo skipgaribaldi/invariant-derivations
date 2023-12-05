@@ -1,0 +1,166 @@
+
+/////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and a trace bound"
+// by symmetry breaking
+//
+/////////////////////////////////////////////////////////////////
+
+//     The basic plan is to branch the representation to get a list of weights
+//     Feed the list of weights to our custom function, which produces the list of 
+// critical points in a torus over C that satisfy the necessary condition to come
+// from the compact group over R.
+
+// This file provides the supporting routines.  Actual computation is done in
+// break-exgroups.magma
+
+load "trace_base.magma";
+
+// return the dimension fo a vector
+function VecToDim(v);
+	return Dimension(Parent(v));
+end function;
+
+/////////////////////////////////////////////////////////////////
+//
+// Convert a weight of A1^n into a polynomial representing the trace on a rep
+//
+/////////////////////////////////////////////////////////////////
+function WtToPoly(P, wt);
+	// input: P = polynomial ring, wt = vector to be converted
+
+	rval := 1;
+	rk := VecToDim(wt);
+	for i in [1..rk] do
+		// trace on the total module is tensor product of restrictions to each A1
+		case wt[i]:
+			when 0: // trivial representation
+				continue; // trace is 1
+			when 1: // P.i is the trace of the natural rep
+				rval *:= P.i;
+			when 2: // trace on the adjoint rep
+				rval *:= P.i^2 - 1;
+			when 3: 
+				rval *:= P.i^3 - 2*P.i;
+			else // we didn't program what to do in this case
+				printf error_str;
+				printf "WtToPoly got unexpected value %o from weight %o\n", wt[i], wt;
+		end case;
+	end for;
+
+	return rval;
+end function;
+
+
+/////////////////////////////////////////////////////////////////
+//
+// Take a LieRepDec for a big group and return a polynomial for the trace
+// calculated on a subgroup of type A1^n
+//
+/////////////////////////////////////////////////////////////////
+function DecToObj(D);
+	// input: D is a LieRepDec
+
+	wts, mults := Weights(D);  // weights and multiplicities in D
+
+	// what is the rank of the group?
+	rk := VecToDim(wts[1]);
+
+	// define the polynomial ring we will work in
+	P := PolynomialAlgebra(Rationals(),rk,"grevlex");
+
+	// construct the objective function (the trace on the representation D)
+	// that we will optimize
+	obj := &+[mults[i]*WtToPoly(P, wts[i]) : i in [1..#wts]];
+
+	// say what we found
+	printf info_str;
+	printf "Found objective function:\n";
+	printf indent_space^2;
+	print obj;
+
+	return obj;
+end function;
+
+
+function CheckTraces(obj, desired_min, desired_max, extra_gens);
+	P := Parent(obj);
+	rk := Rank(P);
+
+	gens := [(P.i^2-4)*Derivative(obj,i):i in [1..rk]]; // equations to be satisfied
+	gens := gens cat extra_gens;
+
+	idl := Ideal(gens);
+	t := Realtime();
+	pts := RadicalDecomposition(idl);
+	printf "%o Solving the system of equations took %o seconds\n", info_str, Realtime(t);
+
+	trs := {Rationals()|NormalForm(obj,p):p in pts};
+
+	// find those critical points with trace NOT in the good region,
+	// i.e., the bad points
+	pts_goodtrs := [];
+	pts_badtrs := [];
+	for p in pts do
+		tr := Rationals()!NormalForm(obj,p);
+		if desired_min le tr and tr le desired_max then
+			Append(~pts_goodtrs, p); // we like these traces
+		else
+			Append(~pts_badtrs, p); // these are traces outside our range
+		end if;
+	end for;
+
+	// check that the points in badtrs cannot arise from the compact form
+	for i in [1..#pts_badtrs] do
+		p := pts_badtrs[i];
+		if &and[Abs(Rationals()!NormalForm(P.i^2, p) - 2) le 2 : i in [1..rk]] then
+			print i, p, NormalForm(obj,p);
+			assert false;
+		end if;
+	end for;
+
+	// We deduce that all traces are in the good range
+	good_trs := {Rationals()|NormalForm(obj,p):p in pts_goodtrs};
+
+	return good_trs;
+end function;
+
+
+function ObjToTraces(obj);
+	P := Parent(obj);
+	rk := Rank(P);
+
+	// find the critical points
+	gens := [(P.i^2-4)*Derivative(obj,i):i in [1..rk]]; // equations to be satisfied
+	idl := Ideal(gens);
+	t := Realtime();
+	pts := RadicalDecomposition(idl);
+
+	// which points satisfy the necessary condition to come from the compact?
+	good_pts := {p:p in pts|&and[Abs(Rationals()!NormalForm(P.i^2,p)-2) le 2:i in [1..rk]]};
+	bad_pts := {p:p in pts|not(p in good_pts)};
+
+	// take the traces of all the points on the big rep
+	good_trs := {Rationals()|NormalForm(obj,p):p in good_pts};
+	bad_trs := {Rationals()|NormalForm(obj,p):p in bad_pts};
+
+	good_min := Min(good_trs);
+	good_max := Max(good_trs);
+
+	// say what we found
+	printf "%o Found possible traces at critical points in [%o, %o]\n", info_str, good_min, good_max;
+	printf indent_space^2;
+	print good_trs;
+
+	// we believe that the bads should not pick up any new traces in the good trace range
+	// actually this fails for E7
+	// assert {b:b in bad_trs|good_min le b and b le good_max} subset good_trs;
+
+	printf "Solving the system of equations took %o seconds\n", Realtime(t);
+	return good_min, good_max;
+end function;
+
+function DecToTraces(D);
+	return ObjToTraces(DecToObj(D));
+end function;
+

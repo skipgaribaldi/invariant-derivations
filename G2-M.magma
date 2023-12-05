@@ -1,0 +1,10 @@
+////////////////////////////////////////////////////////////////
+//
+// Magma file to support the paper "Invariant derivations and a trace bound"
+// contains matrix describing invariant derivations for type G2
+//
+/////////////////////////////////////////////////////////////////
+
+P := PolynomialRing(RationalField(), [ 2, 3 ], "grevlexw", [ 2, 3 ]);
+
+M := Matrix(P, Rank(P), [4*P.1^2 - 4*P.2 - 16*P.1 - 28, 6*P.1*P.2 - 14*P.1^2 + 14*P.2 - 16*P.1 + 14, 6*P.1*P.2 - 14*P.1^2 + 14*P.2 - 16*P.1 + 14, -12*P.1^3 + 12*P.2^2 + 24*P.1*P.2 - 20*P.1^2 + 8*P.2 + 44*P.1 - 28 ]);

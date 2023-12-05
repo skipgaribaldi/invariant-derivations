@@ -1,0 +1,144 @@
+/////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and trace bounds"
+// for groups of type E8 via invariant derivations
+//
+/////////////////////////////////////////////////////////////////
+
+load "inv.magma";
+
+////////////////////////////////////////////////////////////////
+//
+// Find the character values for a fundamental character
+// Compared to rep_to_crits in inv.magma, this version is only for 
+// type E8 and is optimized to efficiently calculate it while addressing
+// the key problems with that case
+//
+// args:  datum = root datum
+//      Me8 = matrix M for E8 (you probably want to read it in)
+//      Chi = index of fundamental character
+//
+// returns: nothing, it's a procedure
+//      no news is good news: this function alarms if it detects a trace smaller than expected
+//
+/////////////////////////////////////////////////////////////////
+procedure E8_rep_to_crits(datum, Me8, Chi);
+  P := CoefficientRing(Me8);
+
+  corners:=RadicalDecomposition(Ideal(Eltseq(Me8)));
+  // first minimize over corners
+
+  mincs:=[ -13, -494, -2496, -41888, -17290, -1216, -84, -8 ];
+  maxcs:=[ 3875, 147250, 6696000, 6899079264, 146325270, 2450240, 30380, 248 ];
+
+  // pick the fundamental character to minimize
+  minc:=Minimum([Rationals()!NormalForm(P.Chi,c):c in corners]);
+  assert minc eq mincs[Chi];
+  // dimension of irrep
+  maxc:=Maximum([Rationals()!NormalForm(P.Chi,c):c in corners]);
+  assert maxc eq maxcs[Chi];
+
+  idl:=Ideal(Eltseq(Me8[Chi]));
+  Groebner(idl);
+  assert Dimension(idl) eq 0;
+  dg:=Evaluate(HilbertSeries(LeadingMonomialIdeal(idl)),1);
+  dg;
+  A:=quo<P|idl>;
+  //SetVerbose("Groebner",2);
+  time mp:=MinimalPolynomial(A.Chi);
+  //SetVerbose("Groebner",false);
+
+  // first deal with rational traces
+  rts:=Roots(mp);
+  rts:=[r:r in rts|r[1] lt minc];
+  time rd1:=[idl+Ideal(P.Chi-r[1]):r in rts];
+  time rd1:=&cat[RadicalDecomposition(r):r in rd1];
+  rd1:=[r:r in rd1|HilbertSeries(LeadingMonomialIdeal(r)) eq 1];
+
+  cpts:=[[Rationals()|NormalForm(P.i,r):i in [1..8]]:r in rd1];
+  goods:=[c:c in cpts|IsNegativeSemiDefinite(Evaluate(Me8,c))];
+  assert #goods eq 0; // we didn't catch anything
+
+  SignAtPlace:=function(x,pl) // return 1 if x is positive at pl, 0 if 0, -1 if negative
+    local L,rL;
+    if x eq 0 then return 0; end if;
+    if NumberField(pl) eq Rationals() then return Integers()!(x/Abs(x)); end if;
+    if IsComplex(pl) then return 1; end if;
+    if IsSquare(x) then return 1; end if;
+    L:=ext<NumberField(pl)|Polynomial([-x,0,1])>;
+    rpsL:=RealPlaces(L);
+    if exists(rL){r:r in rpsL|Extends(r,pl)} then return 1; else return -1; end if;
+  end function;
+
+  ff:=Factorization(mp);
+  mps:=[f[1]:f in ff|Degree(f[1]) gt 1];
+  goodsb:=[Parent(<1,1>)|];
+  for p in mps do
+    Index(mps,p),#mps;
+    K<z>:=ext<Rationals()|p>;
+    pls:=RealPlaces(K);
+
+    // tst is positive iff minc>K.1 (what we are seeking) and maxc>-K.1 (otherwise is not from compact group) 
+    tst:=(minc-K.1)*(K.1+maxc); 
+
+    // these are the points with traces that lie outside the range predicted by the corners
+    pp:=[i:i in [1..#pls]|SignAtPlace(tst,pls[i]) eq 1]; 
+    if #pp eq 0 then continue; end if; // we didn't find any
+
+    ii:=idl+Ideal(Evaluate(p,P.Chi));
+    iie:=ChangeOrder(ii,<"elimw",[i:i in [1..8]|i ne Chi],[Chi],[WeightedDegree(P.i):i in [1..8]]>);
+    time Groebner(iie);
+    // check that the objective generates the field
+    // (if not, we'd have to do something more complicated!)
+    assert &and[TotalDegree(LeadingMonomial(p)) eq 1:p in Basis(iie)|Degree(LeadingMonomial(p),Chi) eq 0];
+
+    // map -M into the reals, check if it is positive semi-definite
+    Mx:=Evaluate(Me8,[NormalForm(Generic(iie).i,iie):i in [1..8]]);
+    MxK:=-Evaluate(Mx,[i eq Chi select K.1 else 0:i in [1..8]]); // negative of M at K
+    rnk:=Rank(MxK);
+    ss:=[Integers()|];
+    while #ss lt rnk and #pp gt 0 do
+      for i in [Max([0] cat ss)+1..8] do
+        ssp:=ss cat [i];
+
+        // check the determinant of the minors of -M: is it >= 0 ?
+        dt:=Determinant(Matrix(#ssp,#ssp,[MxK[i,j]:i,j in ssp])); 
+        if dt eq 0 then continue; end if; // determinant zero is positive semi-definite
+        pp:=[i:i in pp|SignAtPlace(dt,pls[i]) eq 1]; // where is the determinant positive?
+        ss:=ssp; break;
+      end for;
+    end while;
+    for i in pp do // pp are the places where M is negative semidefinite
+      Append(~goodsb,<Index(mps,p),i>);
+    end for;
+  end for;
+  assert #goodsb eq 0;
+  Cputime();
+ 
+end procedure;
+
+
+
+datum, A, fund_reps := setup("E8");
+// for E8 we save some time and load the matrix M
+load "E8-M.magma";
+
+// print out the traces on the corners
+print "Values of the traces on the corners, where each row is a corner:";
+idlc := Ideal(Eltseq(M));
+corners := RadicalDecomposition(idlc);
+corner_trs := [[[Rationals()|NormalForm(P.i,c): i in [1..Rank(datum)]]:c in corners]];
+print corner_trs;
+
+
+// adjoint representation
+section("E8 adjoint representation by invariant derivations");
+E8_rep_to_crits(datum, M, adj_index(datum));
+
+
+// representations of dimension 3875, 30380, 147250
+for ind in [1, 7, 2] do
+  section(Sprintf("E8 fundamental irrep of dimension %o", FundDim(datum, ind)));
+  E8_rep_to_crits(datum, M, ind);
+end for;
+
