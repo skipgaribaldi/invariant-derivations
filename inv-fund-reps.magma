@@ -1,7 +1,8 @@
 /////////////////////////////////////////////////////////////////
 //
 // Magma code to support the paper "Invariant derivations and trace bounds"
-// for groups of type E8 via invariant derivations
+// Find the minimum of the trace on a fundamental representation
+// This code is designed to work for G2, F4, and E8
 //
 /////////////////////////////////////////////////////////////////
 
@@ -15,39 +16,56 @@ load "inv.magma";
 // the key problems with that case
 //
 // args:  datum = root datum
-//      Me8 = matrix M for E8 (you probably want to read it in)
-//      Chi = index of fundamental character
+//      M = matrix M for your group, as defined in the paper
+//      Chi = integer indicating which fundamental character
 //
-// returns: nothing, it's a procedure
-//      no news is good news: this function alarms if it detects a trace smaller than expected
+//      mincs (optional): array of minimum values at the corners
+//      maxcs (optional): array of maximum values at the corners
+//      verbose (optional): boolean, print some extra diagnostic output
+//
+// returns: list of data about each critical point with a trace that is smaller than that
+//      on the corners
+//
+// for output, no news is good news, meaning minimum is at a corner
 //
 /////////////////////////////////////////////////////////////////
-procedure E8_rep_to_crits(datum, Me8, Chi);
-  P := CoefficientRing(Me8);
+function fundrep_to_crits(datum, M, Chi : mincs := true, maxcs := true, verbose := false);
+  P := CoefficientRing(M);
 
-  corners:=RadicalDecomposition(Ideal(Eltseq(Me8)));
-  // first minimize over corners
+  if Type(mincs) eq BoolElt or Type(maxcs) eq BoolElt then 
+    // They did not provide the corners, so calculate them
 
-  mincs:=[ -13, -494, -2496, -41888, -17290, -1216, -84, -8 ];
-  maxcs:=[ 3875, 147250, 6696000, 6899079264, 146325270, 2450240, 30380, 248 ];
+    corners:=RadicalDecomposition(Ideal(Eltseq(M)));
+    // first minimize over corners
 
-  // pick the fundamental character to minimize
-  minc:=Minimum([Rationals()!NormalForm(P.Chi,c):c in corners]);
-  assert minc eq mincs[Chi];
-  // dimension of irrep
-  maxc:=Maximum([Rationals()!NormalForm(P.Chi,c):c in corners]);
-  assert maxc eq maxcs[Chi];
+    // pick the fundamental character to minimize
+    minc:=Minimum([Rationals()!NormalForm(P.Chi,c):c in corners]);
+    assert minc eq mincs[Chi];
+    // dimension of irrep
+    maxc:=Maximum([Rationals()!NormalForm(P.Chi,c):c in corners]);
+    assert maxc eq maxcs[Chi];
+  else // they gave us the corners
+    minc := mincs[Chi]; // minimum trace on a corner
+    maxc := maxcs[Chi]; // dimension of the representation
+  end if;
 
-  idl:=Ideal(Eltseq(Me8[Chi]));
+  idl:=Ideal(Eltseq(M[Chi]));
   Groebner(idl);
   assert Dimension(idl) eq 0;
   dg:=Evaluate(HilbertSeries(LeadingMonomialIdeal(idl)),1);
-  dg;
+  if verbose then
+    dg;
+  end if;
   A:=quo<P|idl>;
-  SetVerbose("Groebner",2);
+
+  if verbose then
+    SetVerbose("Groebner",2);
+  end if;
   time mp:=MinimalPolynomial(A.Chi);
-  SetVerbose("Groebner",false);
-  save "E8state1";
+  if verbose then
+    SetVerbose("Groebner",false);
+  end if;
+  //  save "state1";
 
   //
   // first deal with rational traces
@@ -58,15 +76,15 @@ procedure E8_rep_to_crits(datum, Me8, Chi);
   time rd1:=&cat[RadicalDecomposition(r):r in rd1];
   rd1:=[r:r in rd1|HilbertSeries(LeadingMonomialIdeal(r)) eq 1];
 
-  cpts:=[[Rationals()|NormalForm(P.i,r):i in [1..8]]:r in rd1];
-  goods:=[c:c in cpts|IsNegativeSemiDefinite(Evaluate(Me8,c))];
+  cpts:=[[Rationals()|NormalForm(P.i,r):i in [1..Rank(datum)]]:r in rd1];
+  goods:=[c:c in cpts|IsNegativeSemiDefinite(Evaluate(M,c))];
 
-  if goods ne 0 then // did we catch anything?
+  if #goods ne 0 then // did we catch anything?
     print error_str cat "Found traces not in the range";
     for k in [1..#rd1] do
       r := rd1[k];
-      c := [Rationals()|NormalForm(P.i,r):i in [1..8]];
-      if IsNegativeSemiDefinite(Evaluate(Me8,c)) then
+      c := [Rationals()|NormalForm(P.i,r):i in [1..Rank(datum)]];
+      if IsNegativeSemiDefinite(Evaluate(M,c)) then
         print r, c;
       end if;
     end for;
@@ -85,11 +103,13 @@ procedure E8_rep_to_crits(datum, Me8, Chi);
 
   ff:=Factorization(mp);
   mps:=[f[1]:f in ff|Degree(f[1]) gt 1];
-  goodsb:=[Parent(<1,1>)|];
+  goodsb:=[Parent(<1,1,RealField()!1>)|];
   
-  save "E8state2";
+   // save "state2";
   for p in mps do
-    Index(mps,p),#mps;
+    if verbose then
+      Index(mps,p),#mps;
+    end if;
     K<z>:=ext<Rationals()|p>;
     pls:=RealPlaces(K);
 
@@ -101,19 +121,19 @@ procedure E8_rep_to_crits(datum, Me8, Chi);
     if #pp eq 0 then continue; end if; // we didn't find any
 
     ii:=idl+Ideal(Evaluate(p,P.Chi));
-    iie:=ChangeOrder(ii,<"elimw",[i:i in [1..8]|i ne Chi],[Chi],[WeightedDegree(P.i):i in [1..8]]>);
+    iie:=ChangeOrder(ii,<"elimw",[i:i in [1..Rank(datum)]|i ne Chi],[Chi],[WeightedDegree(P.i):i in [1..Rank(datum)]]>);
     time Groebner(iie);
     // check that the objective generates the field
     // (if not, we'd have to do something more complicated!)
     assert &and[TotalDegree(LeadingMonomial(p)) eq 1:p in Basis(iie)|Degree(LeadingMonomial(p),Chi) eq 0];
 
     // map -M into the reals, check if it is positive semi-definite
-    Mx:=Evaluate(Me8,[NormalForm(Generic(iie).i,iie):i in [1..8]]);
-    MxK:=-Evaluate(Mx,[i eq Chi select K.1 else 0:i in [1..8]]); // negative of M at K
+    Mx:=Evaluate(M,[NormalForm(Generic(iie).i,iie):i in [1..Rank(datum)]]);
+    MxK:=-Evaluate(Mx,[i eq Chi select K.1 else 0:i in [1..Rank(datum)]]); // negative of M at K
     rnk:=Rank(MxK);
     ss:=[Integers()|];
     while #ss lt rnk and #pp gt 0 do
-      for i in [Max([0] cat ss)+1..8] do
+      for i in [Max([0] cat ss)+1..Rank(datum)] do
         ssp:=ss cat [i];
 
         // check the determinant of the minors of -M: is it >= 0 ?
@@ -126,46 +146,33 @@ procedure E8_rep_to_crits(datum, Me8, Chi);
 
     // pp = list of paces where M is negative semidefinite
     for i in pp do  
-      Append(~goodsb,<Index(mps,p),i>); // this is something in the range of interest
+      trval := RealEmbeddings(K.1)[i];
+      assert (minc-trval)*(trval+maxc) gt 0;  // sanity check that we are in the right range
+      Append(~goodsb,<Index(mps,p),i,trval>); // this is something in the range of interest
+
       // tell someone about it
-      print error_str cat "Found traces not in the range";
-      print p;
-      print K;
-      print pp;
-      print MxK;
+      printf warn_str cat "Found trace not in the range: %.3o\n", trval;
+
+      if verbose  then
+        print p;
+        print K;
+        print pp;
+        print MxK;
+      end if;
     end for;
   end for;
-  save "E8state3";
-  assert #goodsb eq 0;
   Cputime();
+  
+  if #goodsb eq 0 then
+    printf "Minimum (%o) occurs at a corner\n", minc;
+  else
+    printf "Found a non-corner minimum (%.3o)\n", Minimum([good[3] : good in goodsb]);
+  end if;
+
+  //  save "state3";
+
+  return goodsb;
  
-end procedure;
+end function;
 
-
-
-datum, A, fund_reps := setup("E8");
-// for E8 we save some time and load the matrix M
-load "E8-M.magma";
-
-// print out the traces on the corners
-print "Values of the traces on the corners, where each row is a corner:";
-idlc := Ideal(Eltseq(M));
-corners := RadicalDecomposition(idlc);
-corner_trs := [[[Rationals()|NormalForm(P.i,c): i in [1..Rank(datum)]]:c in corners]];
-print corner_trs;
-
-
-// adjoint representation
-section("E8 adjoint representation by invariant derivations");
-E8_rep_to_crits(datum, M, adj_index(datum));
-
-
-Me8 := M;
-Chi := adj_index(datum);
-
-// representations of dimension 3875, 30380, 147250
-for ind in [1, 7] do
-  section(Sprintf("E8 fundamental irrep of dimension %o", FundDim(datum, ind)));
-  E8_rep_to_crits(datum, M, ind);
-end for;
 

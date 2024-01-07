@@ -333,7 +333,7 @@ function rep_to_crits(datum, M, ind);
 			goodsb:=[Universe(rr)|];
 			time for r in rr do
 			  ii:=idl+Ideal(Evaluate(mps[r[1]],P.ind));
-			  iie:=ChangeOrder(ii,<"elimw",[i:i in [1..Rank(datum)]|i ne ind],[ind],[WeightedDegree(P.i):i in [1..8]]>);
+			  iie:=ChangeOrder(ii,<"elimw",[i:i in [1..Rank(datum)]|i ne ind],[ind],[WeightedDegree(P.i):i in [1..Rank(datum)]]>);
 			  time Groebner(iie);
 			  // check that the objective generates the field
 			  // (if not, we'd have to do something more complicated!)

@@ -1,0 +1,30 @@
+/////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and trace bounds"
+// for groups of type F4 via invariant derivations
+//
+/////////////////////////////////////////////////////////////////
+
+load "inv-fund-reps.magma";
+
+cartan_type := "F4";
+
+datum, A, fund_reps := setup(cartan_type);
+M := compute_M(datum, A, fund_reps);
+P := CoefficientRing(M);
+
+// print out the traces on the corners
+print "Values of the traces on the corners, where each row is a corner:";
+idlc := Ideal(Eltseq(M));
+corners := RadicalDecomposition(idlc);
+corner_trs := [[Rationals()|NormalForm(P.i,c): i in [1..Rank(datum)]]:c in corners];
+print corner_trs;
+
+corner_trans := Transpose(Matrix(corner_trs));
+mincs := [Minimum(Eltseq(corner_trans[i])) : i in [1..Rank(datum)]];
+maxcs := [Maximum(Eltseq(corner_trans[i])) : i in [1..Rank(datum)]];
+
+for Chi in [1..Rank(datum)] do
+  section(Sprintf("Fundamental representation %o of %o", Chi, cartan_type));
+  fundrep_to_crits(datum, M, Chi : mincs := mincs, maxcs := maxcs);
+end for;
