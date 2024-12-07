@@ -1,0 +1,36 @@
+/////////////////////////////////////////////////////////////////
+//
+// Magma code to support the paper "Invariant derivations and trace bounds"
+// computations in Weyl groups of type D4 and E6 for proof of Lemma 15.4
+//
+/////////////////////////////////////////////////////////////////
+
+// type E6
+R := RootDatum("E6" : Isogeny := "SC");
+W := ReflectionGroup(R);
+w := [x : x in ConjugacyClasses(W) | x[2] eq 80][1][3];  // get the right element of W
+assert Order(w) eq 3;
+assert Trace(w) eq -3;  // has the right trace
+assert #Eigenvalues(w) eq 0;  // does not have 1 as an eigenvalue
+
+// type D4
+R := RootDatum("D4" : Isogeny := "SC");
+W := ReflectionGroup(R);
+perm := Matrix([
+[0,0,1,0],
+[0,1,0,0],
+[0,0,0,1],
+[1,0,0,0]
+]);
+gens := SetToSequence(Generators(W));
+// generators are reflections in the simple roots, with generator 2 being for the central vertex of the Dynkin diagram
+matgens := [Matrix(gen) : gen in gens]  // generators for W in a form that Magma believes are matrices
+biggens := matgens cat [perm];  // add in the triality action
+G := MatrixGroup<4, IntegerRing() | biggens >;  // Weyl + triality
+Wmat := MatrixGroup<4, IntegerRing() | matgens >;  // just Weyl as matrices
+for i in [6..7] do  // these are the two conjugacy classes that work
+	x := ClassRepresentative(G, i);  // get an element of G
+	assert not(x in Wmat);  // it's not in W
+	assert Trace(x) eq -2;  // has the right trace
+	assert #Eigenvalues(x) eq 0;  // does not have 1 as an eigenvalue
+end for;

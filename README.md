@@ -5,6 +5,7 @@ This collection of Magma scripts contains the computations that support the pape
 The purpose of this README is to explain the contents of the magma scripts.
 
    * trace_base = general routines used in several of the scripts, not particularly mathematical
+   * weyl-D4-E6 = Computations regarding specific elements in the normalizer of a maximal torus for types D4 and E6 used in the proof of Lemma 15.4 
 
 ## Files with "inv" or "-M" in the name
 
@@ -15,7 +16,7 @@ The files with "inv" in the name refer to the method of invariant derivations de
    * inv-fund-reps.magma = compute the minimum value of the trace (somewhat easier than all critical values) for a fundamental representation, assumed to be of G2, F4, or E8, may fail for other groups
       * inv-F4.magma = use the above to compute the minimum of the trace on all fundamental representations of F4
       * inv-F4.out = output of the above
-      * inv-E8.magma (omitted): substitute E8 in for F4 in inv-F4.magma to compute fundamental reps of E8
+      * inv-E8.magma = substitute E8 in for F4 in inv-F4.magma to compute fundamental reps of E8
    * E8-M.magma = contains some data for E8.  This can be recomputed using routines from inv, but it takes a little over 6 minutes on my laptop
    * xx-M.magma = same but for the compact group of type xx
 
