@@ -1,0 +1,149 @@
+// There is a general approach for 
+//
+//       computing the W-invariant derivations on k[T] in bad characteristic.  
+//
+// Let W' be a reflection subgroup for
+// which k[T]^{W'} is still nice.  Then k[T]^{W'} will typically
+// be free as a k[T]^W-module, and a derivation of k[T]^W induces
+// a meromorphic derivation of k[T]^{W'} since the map is generically
+// \'etale.  If the induced derivation is holomorphic, then the
+// induced meromorphic derivation of k[T] has poles only along reflection
+// hypertori of W'.  By W-invariance, it has poles only along those
+// reflection hypertori whose W-orbits are all reflection hypertori of W'.
+// So for almost all choices of W' (i.e., not just the subsystem of long/short
+// roots), holomorphicity of a derivation of
+// k[T]^W on k[T] reduces to holomorphicity on k[T]^{W'}.  This lets
+// us identify the module of W-invariant derivations as a submodule
+// of \Der(k[T]^{W'}), more precisely as the kernel of the composition
+//
+// \Der(k[T]^{W'})
+// \to \Der(k[T]^W,k[T]^{W'})
+// \to \Der(k[T]^W,k[T]^{W'}/k[T]^W).
+//
+// Since
+// \Der(k[T]^W,k[T]^{W'}/k[T]^W)\cong \Der(k[T]^W)\otimes (k[T]^{W'}/k[T]^W),
+// this is a morphism of free k[T]^W-modules, and thus computing
+// the kernel reduces to computing the kernel of a matrix over the
+// relevant polynomial ring, which is straightforward as long as
+// [W:W'] isn't too large.
+
+// In particular, if R = k[z_1,\dots,z_n,1/z_1\cdots z_n], then
+// R^{S_n} = k[e_1,\dots,e_n,1/e_n]
+// R^{S_{n+1}} = k[f_1,\dots,f_n],
+// in which
+//  e_i are the elementary symmetric functions in z_1,\dots,z_n
+// and
+//  f_i = e_i + e_{i-1}/e_n  (with e_0=1),
+// so that R^{S_n} is a free R^{S_{n+1}}-module
+// with basis 1,e_n,\dots,e_n^n, and the above approach works.
+
+// This function performs that computation for
+// SL_m (i.e., type A_{m-1}) in characteristic p
+//
+// Examples:
+//      > is_free(3, 3);        
+//      characteristic 3 divides 3
+//      free
+//      > is_free(4,2);
+//      characteristic 2 divides 4
+//      free
+//      > is_free(5,5);
+//      characteristic 5 divides 5
+//      bad
+//      > is_free(6,2); 
+//      characteristic 2 divides 6
+//      bad
+//      > is_free(6,3);
+//      characteristic 3 divides 6
+//      bad
+//
+//
+function is_free(m, p);
+   if not(IsPrime(p)) then
+      return Sprintf("%o is not prime", p);
+   end if;
+
+   n := m - 1;
+   // probably you are using this in a case where p divides n+1
+   if (m mod p eq 0) then
+      tmpstr := "divides";
+   else
+      tmpstr := "does not divide";
+   end if;
+   printf "characteristic %o %o %o\n", p, tmpstr, m;
+
+   Pf<[f]> := PolynomialAlgebra(GF(p),n,"grevlex");
+
+   Ff := FieldOfFractions(Pf);
+   AssignNames(~Ff,[Sprintf("%o",Pf.i):i in [1..n]]);
+
+   wts := [i:i in [1..n]];
+   // without the "[i:i in ", this segfaults in magma !
+   if n eq 1 then
+      Pe<[e]> := PolynomialAlgebra(Ff,1,"grevlex");
+   else
+      Pe<[e]> := PolynomialAlgebra(Ff,wts,<"elimw",[1..n-1],[n],wts>);
+   end if;
+
+   eqs:=
+   [e[n]*f[1]-e[1]*e[n]-1] cat
+   [e[n]*f[i]-e[i]*e[n]-e[i-1]:i in [2..n]]
+   ;
+
+   eqs := Reduce(eqs);
+
+   tt := -eqs[n]/Evaluate(eqs[n],[0:i in [1..n]]);
+   eni := Pe!((tt+1)/e[n]);
+
+   // express the coefficients in terms of e_n and f_1,\dots,f_n
+   ff:=[e[1]+1/e[n]] cat [e[i]+e[i-1]/e[n]:i in [2..n]];
+
+   // evaluate the S_n-invariant derivations on f_1,\dots,f_n
+   ds:=[[Derivative(ff[j],i):j in [1..n]]:i in [1..n]];
+
+   // eliminate the denominators
+   ds:=[[NormalForm(Pe!(x*(e[n]*eni)^2),eqs):x in d]:d in ds];
+
+   // so now everything is expressed in terms of
+   // \F_p[f_1,\dots,f_n][e_n]/p_n(e_n)
+   // where p_n is the appropriate monic polynomial of degree n.
+
+   // and it suffices to find \F_p[f_1,\dots,f_n]-linear combinations of
+   // e_n^i D_j
+   // that are independent of e_n.
+
+   dsgl := [e[n]^i*Vector(ds[j]):i in [0..n],j in [1..n]];
+
+   dsgl := [[NormalForm(p,eqs):p in Eltseq(d)]:d in dsgl];
+
+   // equivalently we want to compute the kernel of the following matrix
+   // over Pf
+   mm := Matrix([&cat[[MonomialCoefficient(p,e[n]^i):i in [1..n]]:p in d]:d in dsgl]);
+   ker := Kernel(ChangeRing(mm,Pf));
+
+   dssl := [&+[k[i]*Vector(dsgl[i]):i in [1..#dsgl]]:k in MinimalBasis(ker)];
+
+   // this gives a spanning set; try to determine if the module
+   // it spans is free.  If it has n elements, it's clearly free;
+   // otherwise, we can check by computing syzygies whether it's
+   // free at any given point, with the identity being an obvious
+   // (presumably worst) case.  It's probably true (but we haven't
+   // tried to prove it) that if it fails anywhere, then it fails
+   // at the identity.
+   if #dssl ne n then
+      syzs := Kernel(ChangeRing(Matrix(dssl),Pf));
+      // this is the rank at the generic point, where everything is
+      // etale and thus the original module is free
+      rnkg := #dssl-n;
+      // check freeness at the identity, as this has the largest stabilizer
+      pp := Polynomial([GF(p)|-1,1])^(n+1);
+      ev := [Coefficient(pp,n+1-i):i in [1..n]];
+      rnk0 := Rank(Evaluate(BasisMatrix(syzs),ev));
+      if rnkg ne rnk0 then 
+         return "bad"; 
+      end if;
+      return "probably free"; 
+   end if;
+
+   return "free";
+end function;

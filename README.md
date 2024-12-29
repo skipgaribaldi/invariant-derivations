@@ -4,12 +4,15 @@ This collection of Magma scripts contains the computations that support the pape
 
 The purpose of this README is to explain the contents of the magma scripts.
 
+## Description of some files
+
    * trace_base = general routines used in several of the scripts, not particularly mathematical
    * weyl-D4-E6 = Computations regarding specific elements in the normalizer of a maximal torus for types D4 and E6 used in the proof of Lemma 15.4 
+   * bad-char = Check whether the module of invariant derivations for type A is free at the identity, over a field of prime characteristic, see Remark 5.13 in the paper
 
 ## Files with "inv" or "-M" in the name
 
-The files with "inv" in the name refer to the method of invariant derivations described in the paper.
+The files with "inv" in the name refer to the method of invariant derivations described in Part I of the paper.
 
    * inv.magma = the main routines for calculating with the method of invariant derivations
    * inv-exgroups.magma = compute the critical values of the trace on the adjoint representations of the compact exceptional groups except for E8, relies on inv
@@ -21,6 +24,8 @@ The files with "inv" in the name refer to the method of invariant derivations de
    * xx-M.magma = same but for the compact group of type xx
 
 ## Files with "break" in the name
+
+The files with "break" in the name refer to the method of symmetry breaking as in Part II of the paper.
 
    * break-base.magma = the main routines for calculating via symmetry breaking
    * break-exgroups.magma = compute the minimum of the trace and the highest short root representations for the compact exceptional groups other than E6
