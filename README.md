@@ -1,4 +1,4 @@
-# Code to support the paper "Invariant derivations and trace bounds" arXiv:2312.03101
+# Code to support the paper "Invariant derivations and trace bounds" [arXiv:2312.03101](https://arxiv.org/abs/2312.03101)
 
 This collection of Magma scripts contains the computations that support the paper "Invariant derivations and trace bounds" by Garibaldi, Guralnick, and Rains.
 
